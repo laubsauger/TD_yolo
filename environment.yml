@@ -1,0 +1,45 @@
+name: yolo-video-detection
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - pip
+  - numpy>=1.20.0
+  - cython~=3.0.0
+  - setuptools>=63.0
+  - wheel>=0.40
+  
+  # Development tools
+  - pytest
+  - flake8
+  - black
+  - isort
+  
+  # PyTorch - CPU version by default, can be changed to GPU
+  # For GPU: pytorch-cuda=11.8 pytorch torchvision torchaudio
+  - pytorch::pytorch
+  - pytorch::torchvision
+  - pytorch::torchaudio
+  
+  # OpenCV (conda-forge version)
+  - opencv
+  
+  # Additional scientific packages
+  - scipy
+  - matplotlib
+  - pandas
+  
+  - pip:
+    # Project-specific requirements
+    - pyyaml
+    - ultralytics~=8.0.114
+    - av~=10.0.0
+    - onnxsim~=0.4.33
+    - onnx~=1.14.0
+    - onnxruntime>=1.11.0
+    
+    # Install the local package in development mode
+    - -e .

@@ -1,0 +1,13 @@
+[MASTER]
+# TouchDesigner specific configuration
+
+[MESSAGES CONTROL]
+# Disable warnings for TouchDesigner built-in globals
+disable=undefined-variable
+
+[TYPECHECK]
+# Add TouchDesigner globals to ignored list
+ignored-modules=op,me,parent,ipar,iop
+
+# Additional TouchDesigner globals
+additional-builtins=op,me,parent,ipar,iop

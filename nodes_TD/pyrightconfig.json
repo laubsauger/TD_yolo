@@ -1,0 +1,15 @@
+{
+  "defineConstant": {
+    "TOUCHDESIGNER": true
+  },
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "extraPaths": ["."],
+      "pythonVersion": "3.9",
+      "reportUndefinedVariable": false
+    }
+  ],
+  "reportMissingImports": "warning",
+  "reportGeneralTypeIssues": "warning"
+}
