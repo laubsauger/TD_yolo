@@ -208,9 +208,11 @@ def onSetupParameters(scriptOp):
     resolution = load_resolution_info()
     if resolution:
         _configured_resolution = resolution
-        print(f"[OK] Loaded resolution from main node: {resolution[0]}x{resolution[1]}")
+        if _logger:
+            _logger.info(f"Loaded resolution from main node: {resolution[0]}x{resolution[1]}")
     else:
-        print("[WARNING] No resolution info found - please setup main YOLO node first")
+        if _logger:
+            _logger.warning("No resolution info found - please setup main YOLO node first")
     
     # Setup parameters
     page = scriptOp.appendCustomPage("Pose Data")
@@ -244,6 +246,14 @@ def onSetupParameters(scriptOp):
         p.default = props["default"]
         p.val = props["default"]
     
+    # Logging level control
+    p = page.appendMenu('Loglevel', label='Log Level')
+    p.menuNames = ['Off', 'Error', 'Warning', 'Info', 'Debug']
+    p.menuLabels = ['Off', 'Error', 'Warning', 'Info', 'Debug']
+    p.default = 'Info'
+    p.val = 'Info'
+    p.help = 'Control logging verbosity'
+    
     return
 
 
@@ -257,7 +267,8 @@ def onPulse(par):
         resolution = load_resolution_info()
         if resolution:
             _configured_resolution = resolution
-            print(f"[OK] Reloaded resolution config: {resolution[0]}x{resolution[1]}")
+            if _logger:
+                _logger.info(f"Reloaded resolution config: {resolution[0]}x{resolution[1]}")
             # Update display
             try:
                 scriptOp = op(me)
@@ -266,7 +277,8 @@ def onPulse(par):
             except:
                 pass
         else:
-            print("[WARNING] No resolution config found")
+            if _logger:
+                _logger.warning("No resolution config found")
 
 
 def connect_to_pose_data():
@@ -290,7 +302,7 @@ def connect_to_pose_data():
     if _configured_resolution is None:
         _configured_resolution = load_resolution_info()
         if _configured_resolution is None:
-            print("[ERROR] No resolution configured - please setup main YOLO node first")
+            _logger.error("No resolution configured - please setup main YOLO node first")
             return
     
     print(f"\n[INFO] Connecting to pose data (resolution: {_configured_resolution[0]}x{_configured_resolution[1]})")
@@ -304,7 +316,7 @@ def connect_to_pose_data():
     try:
         # Connect to existing shared memory
         _pose_memory = shared_memory.SharedMemory(name="pose_data")
-        print(f"[OK] Connected to pose memory (size: {_pose_memory.size} bytes)")
+        _logger.info(f"Connected to pose memory (size: {_pose_memory.size} bytes)")
         _initialized = True
         
         # Update info display safely
@@ -316,10 +328,10 @@ def connect_to_pose_data():
             pass
         
     except FileNotFoundError:
-        print("[ERROR] Pose memory not found - is YOLO server running?")
+        _logger.error("Pose memory not found - is YOLO server running?")
         _initialized = False
     except Exception as e:
-        print(f"[ERROR] Error: {e}")
+        _logger.error(f"Error: {e}")
         _initialized = False
 
 
@@ -378,7 +390,26 @@ def setup_channels_separate(scriptOp, num_persons: int):
 
 def onCook(scriptOp):
     """Optimized cook with caching"""
-    global _pose_memory, _initialized, _params_cache, _pose_data_cache, _last_frame
+    global _pose_memory, _initialized, _params_cache, _pose_data_cache, _last_frame, _logger
+    
+    # Initialize logger if needed
+    if _logger is None:
+        _logger = get_logger(parent(), TDLogger.LEVEL_INFO)
+    
+    # Update logger level based on parameter
+    try:
+        if hasattr(scriptOp.par, 'Loglevel'):
+            level_str = scriptOp.par.Loglevel.eval()
+            level_map = {
+                'Off': TDLogger.LEVEL_OFF,
+                'Error': TDLogger.LEVEL_ERROR,
+                'Warning': TDLogger.LEVEL_WARNING,
+                'Info': TDLogger.LEVEL_INFO,
+                'Debug': TDLogger.LEVEL_DEBUG
+            }
+            _logger.set_level(level_map.get(level_str, TDLogger.LEVEL_INFO))
+    except:
+        pass
     
     # Check if active
     if hasattr(scriptOp.par, 'Active') and not scriptOp.par.Active.eval():
@@ -393,7 +424,7 @@ def onCook(scriptOp):
     
     # Type guards
     if _params_cache is None or _pose_data_cache is None:
-        print("Missing required caches")
+        _logger.error("Missing required caches")
         scriptOp.clear()
         return
     
@@ -412,7 +443,7 @@ def onCook(scriptOp):
             _pose_data_cache.check_and_update(_pose_memory, current_frame)
         except BufferError as e:
             # Handle buffer export error - reconnect on next frame
-            print(f"[WARNING] BufferError in pose data: {e}. Reconnecting...")
+            _logger.warning(f"BufferError in pose data: {e}. Reconnecting...")
             _pose_memory = None
             _initialized = False
             scriptOp.clear()

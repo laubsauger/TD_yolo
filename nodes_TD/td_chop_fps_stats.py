@@ -6,12 +6,14 @@ from multiprocessing import shared_memory
 from typing import Optional
 from collections import deque
 import time
+from td_logging import TDLogger, get_logger
 
 # Constants
 FPS_STATS_SIZE = 16384  # macOS minimum shared memory size
 CHANNEL_NAMES = ['server_fps', 'server_process_ms', 'server_frames', 'td_fps']
 
 # Global state
+_logger: Optional[TDLogger] = None
 _fps_memory: Optional[shared_memory.SharedMemory] = None
 _initialized = False
 _channels_setup = False
@@ -27,7 +29,12 @@ _zero_output = np.zeros(4, dtype=np.float32)
 
 def onSetupParameters(scriptOp):
     """Setup parameters"""
-    print("\n=== FPS Stats CHOP Setup (Optimized) ===")
+    global _logger
+    
+    # Initialize logger
+    _logger = get_logger(parent(), TDLogger.LEVEL_INFO)
+    
+    _logger.log("\n=== FPS Stats CHOP Setup (Optimized) ===")
     
     # Set timeslice to cook every frame
     scriptOp.par.timeslice = True
@@ -36,7 +43,30 @@ def onSetupParameters(scriptOp):
     page = scriptOp.appendCustomPage("FPS")
     page.appendPulse("Connect", label="Connect to FPS Stats")
     
-    print("[OK] Ready to connect")
+    # Auto-connect toggle
+    p = page.appendToggle("Autoconnect", label="Auto Connect")
+    p.default = True
+    p.val = True
+    p.help = "Automatically connect on startup"
+    
+    # Logging level control
+    p = page.appendMenu('Loglevel', label='Log Level')
+    p.menuNames = ['Off', 'Error', 'Warning', 'Info', 'Debug']
+    p.menuLabels = ['Off', 'Error', 'Warning', 'Info', 'Debug']
+    p.default = 'Info'
+    p.val = 'Info'
+    p.help = 'Control logging verbosity'
+    
+    # Try to auto-connect immediately
+    if hasattr(scriptOp.par, 'Autoconnect') and scriptOp.par.Autoconnect.eval():
+        try:
+            import threading
+            # Delay connection slightly to ensure shared memory is ready
+            threading.Timer(0.5, connect_to_fps_stats).start()
+        except:
+            pass
+    
+    _logger.info("Ready to connect")
     return
 
 
@@ -69,20 +99,20 @@ def connect_to_fps_stats():
     """Connect to FPS shared memory"""
     global _fps_memory, _initialized, _channels_setup
     
-    print("\n[INFO] Connecting to FPS stats")
+    _logger.info("Connecting to FPS stats")
     
     try:
         _fps_memory = shared_memory.SharedMemory(name="fps_stats")
         
         # Verify size
         if _fps_memory.size < 16:
-            print(f"[ERROR] FPS stats memory too small: {_fps_memory.size} bytes")
+            _logger.error(f"FPS stats memory too small: {_fps_memory.size} bytes")
             _fps_memory.close()
             _fps_memory = None
             _initialized = False
             return
         
-        print(f"[OK] Connected to FPS stats memory (size: {_fps_memory.size} bytes)")
+        _logger.info(f"Connected to FPS stats memory (size: {_fps_memory.size} bytes)")
         _initialized = True
         
         # Setup CHOP channels once
@@ -99,17 +129,36 @@ def connect_to_fps_stats():
                         pass
         
     except FileNotFoundError:
-        print("[ERROR] FPS stats memory not found - is YOLO server running?")
+        _logger.error("FPS stats memory not found - is YOLO server running?")
         _initialized = False
     except Exception as e:
-        print(f"[ERROR] Connection failed: {e}")
+        _logger.error(f"Connection failed: {e}")
         _initialized = False
 
 
 def onCook(scriptOp):
     """Optimized cook with caching"""
     global _fps_memory, _initialized, _td_frame_times, _last_td_frame_time, _frame_count
-    global _stats_cache, _cache_frame, _channels_setup
+    global _stats_cache, _cache_frame, _channels_setup, _logger
+    
+    # Initialize logger if needed
+    if _logger is None:
+        _logger = get_logger(parent(), TDLogger.LEVEL_INFO)
+    
+    # Update logger level based on parameter
+    try:
+        if hasattr(scriptOp.par, 'Loglevel'):
+            level_str = scriptOp.par.Loglevel.eval()
+            level_map = {
+                'Off': TDLogger.LEVEL_OFF,
+                'Error': TDLogger.LEVEL_ERROR,
+                'Warning': TDLogger.LEVEL_WARNING,
+                'Info': TDLogger.LEVEL_INFO,
+                'Debug': TDLogger.LEVEL_DEBUG
+            }
+            _logger.set_level(level_map.get(level_str, TDLogger.LEVEL_INFO))
+    except:
+        pass
     
     # Ensure channel names are set correctly
     if _channels_setup:
@@ -121,12 +170,20 @@ def onCook(scriptOp):
             pass
     
     if not _initialized or _fps_memory is None:
+        # Try to auto-connect on first few cooks if not connected and auto-connect is enabled
+        if _frame_count < 10 and _frame_count % 3 == 0:
+            if hasattr(scriptOp.par, 'Autoconnect') and scriptOp.par.Autoconnect.eval():
+                connect_to_fps_stats()
+        
         # Output zeros efficiently - avoid numChans during cooking
         try:
             for i in range(4):
                 scriptOp[i][0] = 0.0
         except:
             scriptOp.clear()
+            
+        if _frame_count % 120 == 0 and not _initialized:
+            _logger.warning("FPS stats not connected - click Connect button or check YOLO server")
         return
     
     _frame_count += 1
@@ -148,6 +205,11 @@ def onCook(scriptOp):
         if _stats_cache is None or _frame_count - _cache_frame >= 5:
             _stats_cache = np.frombuffer(_fps_memory.buf[:16], dtype=np.float32).copy()
             _cache_frame = _frame_count
+            
+            # Debug log the raw values
+            if _frame_count % 60 == 0:
+                _logger.debug(f"Raw FPS stats: {_stats_cache}")
+                _logger.debug(f"Server FPS: {_stats_cache[0]:.2f}, Process MS: {_stats_cache[1]:.2f}, Frames: {_stats_cache[2]:.0f}, TD FPS: {_stats_cache[3]:.2f}")
         
         # Bulk update CHOP channels - avoid numChans during cooking
         try:
@@ -167,11 +229,11 @@ def onCook(scriptOp):
         
         # Reduced console output - every 600 frames instead of 300
         if _frame_count % 600 == 0:
-            print(f"\n[FPS] Server: {_stats_cache[0]:.1f} | Process: {_stats_cache[1]:.1f}ms | TD: {td_fps:.1f}")
+            _logger.info(f"FPS - Server: {_stats_cache[0]:.1f} | Process: {_stats_cache[1]:.1f}ms | TD: {td_fps:.1f} | Frames: {_stats_cache[2]:.0f}")
         
     except Exception as e:
         if _frame_count % 600 == 0:
-            print(f"[ERROR] Reading FPS stats: {e}")
+            _logger.error(f"Reading FPS stats: {e}")
         # Output zeros on error - avoid numChans during cooking
         try:
             for i in range(4):
@@ -187,4 +249,5 @@ def onDestroy():
         _fps_memory.close()
         _fps_memory = None
     _channels_setup = False
-    print("[INFO] Cleaned up FPS connection")
+    if _logger:
+        _logger.info("Cleaned up FPS connection")

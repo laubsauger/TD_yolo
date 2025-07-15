@@ -48,7 +48,7 @@ def main(args):
 
             for frame in tqdm(container.decode(input_video_stream), total=in_frames, mininterval=5):
                 img = frame.to_rgb().to_ndarray()
-                predictions: Results = model.predict(img, verbose=False)
+                predictions: Results = model.predict(img, verbose=False)  # type: ignore
 
                 for pred in predictions:
                     img = pred.plot(img=img)
@@ -68,8 +68,9 @@ if __name__ == "__main__":
                         required=True, help="A path to YOLO model")
     parser.add_argument("-i", "--input_video", type=str,
                         required=True, help="A path to input video")
-    parser.add_argument("-o", "--output_video", type=str,
-                        required=True, help="A path to input video")
+    parser.add_argument(
+        "-o", "--output_video", type=str, required=True, help="A path to output video"
+    )
     parser.add_argument("--task_type", type=str,
                         choices=["classify", "detect", "segment", "pose"], required=True)
 

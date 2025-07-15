@@ -112,7 +112,8 @@ def load_resolution_info():
                 _configured_resolution = (data['width'], data['height'])
                 return _configured_resolution
     except Exception as e:
-        print(f"Error loading resolution config: {e}")
+        if _logger:
+            _logger.error(f"Error loading resolution config: {e}")
     return _configured_resolution
 
 
@@ -212,7 +213,8 @@ def onPulse(par):
             _initialized = False
     elif par.name == 'Reloadconfig':
         width, height = load_resolution_info()
-        print(f"Reloaded resolution config: {width}x{height}")
+        if _logger:
+            _logger.info(f"Reloaded resolution config: {width}x{height}")
         # Update the display
         if hasattr(op(me).par, 'Resolutioninfo'):
             op(me).par.Resolutioninfo.val = f'{width}x{height}'
@@ -221,7 +223,26 @@ def onPulse(par):
 
 def onCook(scriptOp):
     """Main processing - outputs joint table"""
-    global _shm_pose, _initialized, _frame_count, _last_valid_joints
+    global _shm_pose, _initialized, _frame_count, _last_valid_joints, _logger
+    
+    # Initialize logger if needed
+    if _logger is None:
+        _logger = get_logger(parent(), TDLogger.LEVEL_OFF)  # Default to OFF
+    
+    # Update logger level based on parameter
+    try:
+        if hasattr(scriptOp.par, 'Loglevel'):
+            level_str = scriptOp.par.Loglevel.eval()
+            level_map = {
+                'Off': TDLogger.LEVEL_OFF,
+                'Error': TDLogger.LEVEL_ERROR,
+                'Warning': TDLogger.LEVEL_WARNING,
+                'Info': TDLogger.LEVEL_INFO,
+                'Debug': TDLogger.LEVEL_DEBUG
+            }
+            _logger.set_level(level_map.get(level_str, TDLogger.LEVEL_OFF))
+    except:
+        pass
     _frame_count += 1
     
     # Check if active
@@ -390,7 +411,7 @@ def onCook(scriptOp):
                     
                     # Debug transformed coordinates
                     if joint_name == "nose" and _frame_count % 30 == 0:
-                        print(f"[DEBUG] TD coords nose: raw=({joints[joint_name][0]:.1f},{joints[joint_name][1]:.1f}) final=({x:.1f},{y:.1f})")
+                        _logger.debug(f"TD coords nose: raw=({joints[joint_name][0]:.1f},{joints[joint_name][1]:.1f}) final=({x:.1f},{y:.1f})")
                 elif normalize:
                     # Normalize to 0-1 range
                     x = x / width
@@ -406,7 +427,7 @@ def onCook(scriptOp):
                     
                     # Debug transformed coordinates
                     if joint_name == "nose" and _frame_count % 30 == 0:
-                        print(f"[DEBUG] Centered nose: centered=({x_centered:.1f},{y_centered:.1f}) final=({x:.1f},{y:.1f})")
+                        _logger.debug(f"Centered nose: centered=({x_centered:.1f},{y_centered:.1f}) final=({x:.1f},{y:.1f})")
                 else:
                     # Raw pixel coordinates with optional scale and offset
                     x = x * scale + offset_x
@@ -452,6 +473,7 @@ def onDestroy():
             pass
         _shm_pose = None
     
-    print("[INFO] OpenPose joints DAT cleaned up")
+    if _logger:
+        _logger.info("OpenPose joints DAT cleaned up")
 
 

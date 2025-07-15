@@ -10,6 +10,7 @@ import json
 import os
 import time
 from collections import deque
+from td_logging import TDLogger, get_logger
 
 # Configuration files
 CONFIG_FILE = "/tmp/yolo_td_config.json"
@@ -32,6 +33,7 @@ FLIP_VERTICAL = 0
 FLIP_HORIZONTAL = 1
 
 # Global state
+_logger: Optional[TDLogger] = None
 _shm_states: Optional[shared_memory.SharedMemory] = None
 _sl_params: Optional[shared_memory.ShareableList] = None
 _shm_image: Optional[shared_memory.SharedMemory] = None
@@ -149,20 +151,24 @@ class ParamsCache:
 
 def load_config():
     """Load resolution configuration"""
-    global _configured_resolution
+    global _configured_resolution, _logger
+    
+    # Initialize logger if not already done
+    if _logger is None:
+        _logger = TDLogger("td_top_yolo", TDLogger.LEVEL_INFO)
     
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, 'r') as f:
                 config = json.load(f)
                 _configured_resolution = (config['width'], config['height'])
-                print(f"[OK] Loaded resolution config: {_configured_resolution[0]}x{_configured_resolution[1]}")
+                _logger.info(f"Loaded resolution config: {_configured_resolution[0]}x{_configured_resolution[1]}")
                 return True
         except Exception as e:
-            print(f"[WARNING] Error loading config: {e}")
+            _logger.warning(f"Error loading config: {e}")
     else:
-        print(f"[WARNING] No config file found at {CONFIG_FILE}")
-        print("   Run td_resolution_config.py first to set resolution!")
+        _logger.warning(f"No config file found at {CONFIG_FILE}")
+        _logger.warning("   Run td_resolution_config.py first to set resolution!")
     
     return False
 
@@ -197,7 +203,7 @@ def process_input_frame(raw_frame, params_cache):
         # Already RGB - perfect
         frame = raw_frame
     else:
-        print(f"[ERROR] Expected 3-channel RGB, got {raw_frame.shape[2]} channels")
+        _logger.error(f"Expected 3-channel RGB, got {raw_frame.shape[2]} channels")
         return None, None
     
     # Convert type if needed
@@ -227,18 +233,21 @@ def process_input_frame(raw_frame, params_cache):
 
 def onSetupParameters(scriptOp):
     """Setup with optimizations"""
-    global _params_cache
+    global _params_cache, _logger
     
-    print("\n=== YOLO TouchDesigner Final Optimized ===")
+    # Initialize logger
+    _logger = get_logger(parent(), TDLogger.LEVEL_INFO)
+    
+    _logger.log("\n=== YOLO TouchDesigner Final Optimized ===")
     
     # Initialize params cache
     _params_cache = ParamsCache()
     
     # Load configuration
     if load_config():
-        print(f"[INFO] Using resolution: {_configured_resolution[0]}x{_configured_resolution[1]}")
+        _logger.info(f"Using resolution: {_configured_resolution[0]}x{_configured_resolution[1]}")
     else:
-        print(f"[INFO] Using default: {_configured_resolution[0]}x{_configured_resolution[1]}")
+        _logger.info(f"Using default: {_configured_resolution[0]}x{_configured_resolution[1]}")
     
     # Create controls
     page = scriptOp.appendCustomPage("YOLO")
@@ -353,7 +362,15 @@ def onSetupParameters(scriptOp):
     p.val = False
     p.help = "Enable debug logging"
     
-    print("\n[OK] Click 'Connect to YOLO Server' to start")
+    # Logging level control
+    p = page.appendMenu("Loglevel", label="Log Level")
+    p.menuNames = ['Off', 'Error', 'Warning', 'Info', 'Debug']
+    p.menuLabels = ['Off', 'Error', 'Warning', 'Info', 'Debug']
+    p.default = 'Info'
+    p.val = 'Info'
+    p.help = "Control logging verbosity"
+    
+    _logger.info("Click 'Connect to YOLO Server' to start")
     return
 
 
@@ -363,7 +380,7 @@ def onPulse(par):
         initialize_connection()
     elif par.name == "Reload":
         if load_config():
-            print(f"[OK] Reloaded configuration: {_configured_resolution[0]}x{_configured_resolution[1]}")
+            _logger.info(f"Reloaded configuration: {_configured_resolution[0]}x{_configured_resolution[1]}")
             # Update the resolution display
             try:
                 scriptOp = op(me)
@@ -372,7 +389,7 @@ def onPulse(par):
             except:
                 pass
         else:
-            print("[ERROR] Failed to reload configuration")
+            _logger.error("Failed to reload configuration")
 
 
 def initialize_connection():
@@ -381,7 +398,7 @@ def initialize_connection():
     global _initialized, _shared_array, _array_views
     
     width, height = _configured_resolution
-    print(f"\n[INFO] Connecting to YOLO server at {width}x{height}...")
+    _logger.info(f"Connecting to YOLO server at {width}x{height}...")
     
     # Save for other nodes
     save_resolution_info()
@@ -403,8 +420,8 @@ def initialize_connection():
         # Check buffer size
         required = width * height * 3 * 4
         if _shm_image.size < required:
-            print(f"[ERROR] Buffer too small! Need {required}, have {_shm_image.size}")
-            print(f"   Restart server: python setup_all.py -w {width} -h {height}")
+            _logger.error(f"Buffer too small! Need {required}, have {_shm_image.size}")
+            _logger.error(f"   Restart server: python setup_all.py -w {width} -h {height}")
             cleanup()
             return
         
@@ -415,11 +432,11 @@ def initialize_connection():
         key = f"{width}x{height}"
         _array_views[key] = _shared_array
         
-        print("[OK] Connected successfully!")
+        _logger.info("Connected successfully!")
         _initialized = True
         
     except Exception as e:
-        print(f"[ERROR] Connection failed: {e}")
+        _logger.error(f"Connection failed: {e}")
         cleanup()
 
 
@@ -477,6 +494,25 @@ def onCook(scriptOp):
     if _params_cache is None:
         _params_cache = ParamsCache()
     
+    # Initialize logger if needed
+    if _logger is None:
+        _logger = get_logger(parent(), TDLogger.LEVEL_INFO)
+    
+    # Update logger level based on parameter
+    try:
+        if hasattr(scriptOp.par, 'Loglevel'):
+            level_str = scriptOp.par.Loglevel.eval()
+            level_map = {
+                'Off': TDLogger.LEVEL_OFF,
+                'Error': TDLogger.LEVEL_ERROR,
+                'Warning': TDLogger.LEVEL_WARNING,
+                'Info': TDLogger.LEVEL_INFO,
+                'Debug': TDLogger.LEVEL_DEBUG
+            }
+            _logger.set_level(level_map.get(level_str, TDLogger.LEVEL_INFO))
+    except:
+        pass
+    
     # Update params cache periodically
     _params_cache.update_if_needed(scriptOp, _frame_count)
     
@@ -507,7 +543,7 @@ def onCook(scriptOp):
         black = np.zeros((height, width, 3), dtype=np.uint8)
         scriptOp.copyNumpyArray(black)
         if _frame_count % 60 == 0:
-            print(f"[INFO] Not connected ({width}x{height})")
+            _logger.info(f"Not connected ({width}x{height})")
         _frame_count += 1
         return
     
@@ -538,14 +574,14 @@ def onCook(scriptOp):
     except (ValueError, BufferError) as e:
         # Handle case where shared memory is no longer valid
         if _frame_count % 60 == 0:
-            print(f"[WARNING] Shared memory access error: {e}")
+            _logger.warning(f"Shared memory access error: {e}")
         cleanup()
         return
     server_alive = states_view[2] if len(states_view) > 2 else 0
     
     if server_alive != 51:  # ASCII '3'
         if _frame_count % 60 == 0:
-            print(f"Server not ready (alive={server_alive})")
+            _logger.info(f"Server not ready (alive={server_alive})")
         _frame_count += 1
         return
     
@@ -584,15 +620,15 @@ def onCook(scriptOp):
                 _processing_frame = False
                 
                 if _params_cache and _params_cache.debug and _frame_count % 30 == 0:
-                    print(f"[DEBUG] Received valid result at frame {_frame_count}")
+                    _logger.debug(f"Received valid result at frame {_frame_count}")
             else:
                 # Invalid data - don't update, keep last good frame
                 if _params_cache and _params_cache.debug:
-                    print(f"[WARNING] Invalid result data at frame {_frame_count}, keeping last good frame")
+                    _logger.warning(f"Invalid result data at frame {_frame_count}, keeping last good frame")
         except Exception as e:
             # Error reading - keep last good frame
             if _params_cache and _params_cache.debug:
-                print(f"[WARNING] Error reading result at frame {_frame_count}: {e}")
+                _logger.warning(f"Error reading result at frame {_frame_count}: {e}")
     
     # Get input frame efficiently
     model_frame = None
@@ -610,7 +646,7 @@ def onCook(scriptOp):
             input_h, input_w = raw_frame.shape[:2]
             if (input_w, input_h) != _configured_resolution:
                 if _frame_count % 60 == 0:
-                    print(f"[WARNING] Input {input_w}x{input_h} != configured {width}x{height}, resizing...")
+                    _logger.warning(f"Input {input_w}x{input_h} != configured {width}x{height}, resizing...")
                 raw_frame = cv2.resize(raw_frame, _configured_resolution)
             
             # Process input efficiently
@@ -625,11 +661,11 @@ def onCook(scriptOp):
         if is_overlay_mode and _processing_frame:
             # Skip sending new frame - wait for current one to complete
             if _frame_count % 60 == 0:
-                print(f"[INFO] Overlay mode: Waiting for backend to complete frame")
+                _logger.info(f"Overlay mode: Waiting for backend to complete frame")
         else:
             # Log if we're dropping frames (backend still processing)
             if _processing_frame and _frame_count % 30 == 0:
-                print(f"[WARNING] Backend still processing, may drop frames (frame {_frame_count})")
+                _logger.warning(f"Backend still processing, may drop frames (frame {_frame_count})")
             
             # Update parameters efficiently
             if _sl_params and _params_cache:
@@ -646,7 +682,7 @@ def onCook(scriptOp):
                     # Skip 12 (FPS_LIMIT) - leave as configured
                 except Exception as e:
                     if _frame_count % 60 == 0:
-                        print(f"Error updating params: {e}")
+                        _logger.error(f"Error updating params: {e}")
             
             # Convert to float32 and copy to shared memory
             if model_frame.dtype == np.uint8:
@@ -662,11 +698,11 @@ def onCook(scriptOp):
             
             # Debug shape
             if _params_cache and _params_cache.debug and _frame_count % 60 == 0:
-                print(f"[DEBUG] image_float shape: {image_float.shape}, model_frame shape: {model_frame.shape}")
+                _logger.debug(f"image_float shape: {image_float.shape}, model_frame shape: {model_frame.shape}")
             
             # TouchDesigner should provide 3 channels - verify
             if image_float.shape[2] != 3:
-                print(f"[ERROR] Expected 3 channels, got {image_float.shape[2]} at frame {_frame_count}")
+                _logger.error(f"Expected 3 channels, got {image_float.shape[2]} at frame {_frame_count}")
                 return
             
             if _shared_array is not None:
@@ -677,7 +713,7 @@ def onCook(scriptOp):
             _processing_frame = True
             
             if _params_cache and _params_cache.debug and _frame_count % 30 == 0:
-                print(f"[DEBUG] Sent frame {_frame_count} to backend")
+                _logger.debug(f"Sent frame {_frame_count} to backend")
     
     # Determine output - CRITICAL: Check overlay mode with is_overlay_mode variable
     if is_overlay_mode:
@@ -690,19 +726,19 @@ def onCook(scriptOp):
             _last_output_time = time.time()
             output_frame = new_result
             if _params_cache.debug and _frame_count % 60 == 0:
-                print(f"[DEBUG] Overlay mode: showing new result at frame {_frame_count}")
+                _logger.debug(f"Overlay mode: showing new result at frame {_frame_count}")
         elif _last_output is not None:
             # Keep showing last detection result (no timeout in overlay mode)
             # This is the KEY - we ALWAYS show last good output rather than going black
             output_frame = _last_output
             if _params_cache.debug and _frame_count % 120 == 0:
                 age = time.time() - _last_output_time if _last_output_time else 0
-                print(f"[DEBUG] Overlay mode: reusing last output (age={age:.1f}s)")
+                _logger.debug(f"Overlay mode: reusing last output (age={age:.1f}s)")
         else:
             # No detections yet - show black only as absolute last resort
             output_frame = np.zeros((height, width, 3), dtype=np.uint8)
             if _params_cache.debug:
-                print(f"[DEBUG] Overlay mode: no results yet, showing black at frame {_frame_count}")
+                _logger.debug(f"Overlay mode: no results yet, showing black at frame {_frame_count}")
     else:
         # NORMAL MODE: Can show input video
         if new_result is not None:
@@ -730,7 +766,7 @@ def onCook(scriptOp):
     
     # FINAL SAFETY CHECK: Ensure we have a valid output frame
     if 'output_frame' not in locals() or output_frame is None:
-        print(f"[ERROR] No output frame defined at frame {_frame_count}! Using black.")
+        _logger.error(f"No output frame defined at frame {_frame_count}! Using black.")
         output_frame = np.zeros((height, width, 3), dtype=np.uint8)
     
     # OVERLAY MODE FINAL CHECK: Never output input video
@@ -751,7 +787,7 @@ def onCook(scriptOp):
                     original_mean = float(np.asarray(original_frame).mean())
                 
                 if abs(output_mean - original_mean) < 5:
-                    print(f"[ERROR] Overlay mode output too similar to input at {_frame_count}! Using last good or black.")
+                    _logger.error(f"Overlay mode output too similar to input at {_frame_count}! Using last good or black.")
                     if _last_output is not None:
                         output_frame = _last_output
                     else:
@@ -775,4 +811,5 @@ def onCook(scriptOp):
 def onDestroy():
     """Cleanup on destroy"""
     cleanup()
-    print("Cleaned up")
+    if _logger:
+        _logger.info("Cleaned up")

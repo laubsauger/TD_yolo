@@ -43,13 +43,13 @@ disable = [
 additional-builtins = ["op", "me", "parent", "ipar", "iop"]
 
 [project.urls]
-"Homepage" = "https://github.com/laubsauger/TD_Yolo"
-"Bug Tracker" = "https://github.com/laubsauger/TD_Yolo/issues"
-"Documentation" = "https://github.com/laubsauger/TD_Yolo#readme"
-"Changelog" = "https://github.com/laubsauger/TD_Yolo/blob/main/CHANGELOG.md"
+"Homepage" = "https://github.com/laubsauger/TD_yolo"
+"Bug Tracker" = "https://github.com/laubsauger/TD_yolo/issues"
+"Documentation" = "https://github.com/laubsauger/TD_yolo#readme"
+"Changelog" = "https://github.com/laubsauger/TD_yolo/blob/main/CHANGELOG.md"
 
 [project]
-name = "TD_Yolo"
+name = "TD_yolo"
 readme = {file = "README.md", content-type = "text/markdown"}
 authors = [
     { name = "laubsauger" },

@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-AI assistant instructions for the TD_Yolo project.
+AI assistant instructions for the TD_yolo project.
 
 ## Project Overview
 

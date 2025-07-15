@@ -1,17 +1,20 @@
-# TD_Yolo - High-Performance YOLO for TouchDesigner
+# TD_yolo - High-Performance YOLO for TouchDesigner
 
 Real-time object detection and pose estimation for TouchDesigner, optimized for interactive installations with zero-copy shared memory architecture.
 
 ## 🚀 Features
 
 ### Core Capabilities
+
 - **Object Detection**: Real-time bounding box detection with 80+ object classes
 - **Pose Estimation**: 17-point COCO skeleton tracking for multiple people
+- **OpenPose Renderer**: 25-point synthetic skeleton, ready for SD Controlnets
 - **YOLO11 Support**: Latest models including yolo11n, yolo11n-pose, yolo11x-pose
 - **Zero-Copy Performance**: Shared memory architecture for maximum throughput
 - **TouchDesigner Integration**: Native TD components with Script TOP and CHOP nodes
 
 ### Performance
+
 - 60+ FPS object detection on modern GPUs
 - 30+ FPS pose estimation with multiple people
 - < 16ms end-to-end latency
@@ -23,6 +26,7 @@ Real-time object detection and pose estimation for TouchDesigner, optimized for 
 ## 🎯 Quick Start
 
 ### Prerequisites
+
 - Python 3.9-3.12 (3.11 recommended, 3.13 has compatibility issues)
 - TouchDesigner (2023.11290 or later recommended)
 - NVIDIA GPU with CUDA support (optional but recommended)
@@ -31,8 +35,8 @@ Real-time object detection and pose estimation for TouchDesigner, optimized for 
 
 ```bash
 # Clone and setup
-git clone https://github.com/laubsauger/TD_Yolo.git
-cd TD_Yolo
+git clone https://github.com/laubsauger/TD_yolo.git
+cd TD_yolo
 
 # Create virtual environment and install dependencies
 # On Windows:
@@ -61,6 +65,7 @@ python setup_all.py -m models/yolo11n-pose.pt -w 1920 -h 1080
 ```
 
 The automated setup:
+
 1. Creates Python virtual environment
 2. Installs all dependencies (auto-detects GPU)
 3. Sets up shared memory segments
@@ -88,6 +93,7 @@ python launch_touchdesigner.py YoloDetection.toe
 ### Manual Setup
 
 #### 1. Create Virtual Environment
+
 ```bash
 python -m venv venv
 
@@ -103,26 +109,31 @@ source venv/bin/activate
 The setup script auto-detects your GPU, but you can install manually:
 
 For NVIDIA GPU (CUDA):
+
 ```bash
 pip install -r requirements.gpu.txt
 ```
 
 For CPU or Apple Silicon (MPS GPU):
+
 ```bash
 pip install -r requirements.cpu.txt
 ```
 
 For development:
+
 ```bash
 pip install -r requirements.dev.txt
 ```
 
 #### 3. Build Cython Extensions
+
 ```bash
 pip install -e .
 ```
 
 #### 4. Launch System
+
 ```bash
 # Start YOLO server
 python start_yolo_server.py models/yolo11n-pose.pt
@@ -150,6 +161,7 @@ sequenceDiagram
 ```
 
 ### Shared Memory Layout
+
 - `yolo_states`: 3-byte synchronization flags
 - `params`: Detection parameters (thresholds, dimensions)
 - `image`: Frame buffer (float32, configurable size)
@@ -159,12 +171,14 @@ sequenceDiagram
 ## 🎮 TouchDesigner Nodes
 
 ### Script TOP (`td_complete.py`)
+
 - Handles frame I/O with shared memory
 - Draws bounding boxes and labels
 - Configurable detection parameters
 - Real-time performance metrics
 
 ### Script CHOP (`td_chop_pose.py`)
+
 - Outputs pose keypoints as channels
 - 17 keypoints × 3 values (x, y, confidence)
 - Per-person tracking
@@ -173,6 +187,7 @@ sequenceDiagram
 ## 🤖 Supported Models
 
 ### Object Detection
+
 - `yolo11n.pt` - Nano (fastest, 2.6M params)
 - `yolo11s.pt` - Small (balanced)
 - `yolo11m.pt` - Medium
@@ -181,6 +196,7 @@ sequenceDiagram
 - `yolov8n.pt`, `yolov8x.pt` - Previous generation
 
 ### Pose Estimation
+
 - `yolo11n-pose.pt` - Nano pose (fastest)
 - `yolo11s-pose.pt` - Small pose
 - `yolo11m-pose.pt` - Medium pose
@@ -191,21 +207,25 @@ sequenceDiagram
 ## 🛠️ Advanced Usage
 
 ### Custom Video Processing
+
 ```bash
 python main.py -c models/yolo11n.pt -i input.mp4 -o output.mp4
 ```
 
 ### Quiet Mode (Production)
+
 ```bash
 python setup_all.py -q -m models/yolo11n-pose.pt  # Suppresses debug output
 ```
 
 ### Stop All Processes
+
 ```bash
 python setup_all.py --stop
 ```
 
 ### Environment Management
+
 ```bash
 # Create/recreate virtual environment
 python setup_env.py
@@ -220,6 +240,7 @@ python launch_touchdesigner.py --no-venv
 ## 📐 Configuration
 
 ### Detection Parameters (in TouchDesigner)
+
 - **Score Threshold**: Confidence threshold (0.0-1.0)
 - **IOU Threshold**: Non-max suppression threshold
 - **Max Detections**: Maximum objects to detect
@@ -227,29 +248,32 @@ python launch_touchdesigner.py --no-venv
 - **Draw Labels**: Toggle class labels
 
 ### Resolution Settings
-Default: 1280x720 (16:9)
+
+Default: 640x640 (1:1)
 Pose models: Auto-switches to 640x640
 Custom: Use `-w` and `-h` flags
 
-## 💻 GPU Support Details
+## 💻 GPU Support
 
 ### NVIDIA CUDA
+
 - Full feature support including half precision (FP16)
 - TensorRT optimization available (planned)
 - Multi-GPU support
-- Tested on: RTX 3090, RTX 4090, A100
+- Tested on: Untested
 
 ### Apple Silicon (MPS)
+
 - Native GPU acceleration via Metal Performance Shaders
 - Automatic device detection and configuration
 - Limitations automatically handled:
   - Half precision disabled (uses FP32)
   - Antialiasing disabled in image resizing
   - Grid sampler operations use CPU fallback
-- Tested on: M1, M2, M3 (Pro/Max/Ultra variants)
-- Performance: ~80% of equivalent NVIDIA GPU
+- Tested on: M3 Max
 
 ### CPU Fallback
+
 - Automatic fallback when no GPU available
 - All features supported but slower
 - Consider smaller models (nano variants) for CPU
@@ -257,7 +281,8 @@ Custom: Use `-w` and `-h` flags
 ## 🔧 Development
 
 ### Project Structure
-```
+
+```bash
 TD_yolo/
 ├── models/                 # YOLO model files
 ├── yolo_models/           # Core processing code
@@ -271,11 +296,13 @@ TD_yolo/
 ```
 
 ### Running Tests
+
 ```bash
 pytest tests/
 ```
 
 ### Linting
+
 ```bash
 pylint yolo_models
 autopep8 --in-place --recursive yolo_models
@@ -284,12 +311,6 @@ autopep8 --in-place --recursive yolo_models
 ## 🤝 Contributing
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-### Priority Areas
-1. Performance optimizations
-2. Additional model support
-3. TouchDesigner components
-4. Documentation and examples
 
 ## 📄 License
 
@@ -305,9 +326,8 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) for deta
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/laubsauger/TD_Yolo/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/laubsauger/TD_Yolo/discussions)
-- **Documentation**: See [CLAUDE.md](CLAUDE.md) for development guidance
+- **Issues**: [GitHub Issues](https://github.com/laubsauger/TD_yolo/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/laubsauger/TD_yolo/discussions)
 
 ---
 
