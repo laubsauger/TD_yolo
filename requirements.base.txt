@@ -1,8 +1,9 @@
+numpy<2.0  # Pin to NumPy 1.x for compatibility
 pyyaml
 ultralytics~=8.3.165
 av~=10.0.0
 onnxsim~=0.4.36
 onnx~=1.17.0
 cython~=3.0.0
-opencv-python==4.9.0.80 # <--- ADD THIS LINE
+opencv-python==4.9.0.80
 -r ./requirements.inference.txt

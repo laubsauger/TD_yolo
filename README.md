@@ -22,6 +22,11 @@ Real-time object detection and pose estimation for TouchDesigner, optimized for 
 
 ## 🎯 Quick Start
 
+### Prerequisites
+- Python 3.9-3.12 (3.11 recommended, 3.13 has compatibility issues)
+- TouchDesigner (2023.11290 or later recommended)
+- NVIDIA GPU with CUDA support (optional but recommended)
+
 ### Automated Setup (Recommended)
 
 ```bash
@@ -29,32 +34,73 @@ Real-time object detection and pose estimation for TouchDesigner, optimized for 
 git clone https://github.com/laubsauger/TD_Yolo.git
 cd TD_Yolo
 
-# One-command setup and launch
-python setup_all.py
+# Create virtual environment and install dependencies
+# On Windows:
+setup.bat
+# On macOS/Linux:
+./setup.sh
 
-# Or specify a model
+# Or directly with a specific Python version:
+python3.11 setup_env.py  # Recommended
+python3 setup_env.py     # Uses system default
+
+# For non-interactive setup (e.g., CI/CD):
+python3.11 setup_env.py --yes
+
+# Activate the virtual environment
+# On Windows:
+venv\Scripts\activate
+# On macOS/Linux:
+source venv/bin/activate
+
+# One-command setup and launch
 python setup_all.py -m models/yolo11n-pose.pt
 
 # Custom resolution
-python setup_all.py -w 1920 -h 1080
+python setup_all.py -m models/yolo11n-pose.pt -w 1920 -h 1080
 ```
 
 The automated setup:
-1. Creates conda environment (`yolo_env`)
-2. Installs all dependencies
+1. Creates Python virtual environment
+2. Installs all dependencies (auto-detects GPU)
 3. Sets up shared memory segments
 4. Launches YOLO server
 5. Opens TouchDesigner with the project
 
+### Cross-Platform Commands
+
+All scripts work on Windows, macOS, and Linux:
+
+```bash
+# Setup environment (first time only)
+python setup_env.py
+
+# Use the all-in-one setup (recommended)
+python setup_all.py -m models/yolo11n-pose.pt
+
+# Or run components separately:
+# Note: The YOLO server requires shared memory to be created first
+# Either TouchDesigner must be running, or use setup_all.py to create it
+python start_yolo_server.py models/yolo11n-pose.pt
+python launch_touchdesigner.py YoloDetection.toe
+```
+
 ### Manual Setup
 
-#### 1. Create Conda Environment
+#### 1. Create Virtual Environment
 ```bash
-conda create -n yolo_env python=3.9
-conda activate yolo_env
+python -m venv venv
+
+# Activate on Windows:
+venv\Scripts\activate
+
+# Activate on macOS/Linux:
+source venv/bin/activate
 ```
 
 #### 2. Install Dependencies
+
+The setup script auto-detects your GPU, but you can install manually:
 
 For NVIDIA GPU (CUDA):
 ```bash
@@ -63,7 +109,7 @@ pip install -r requirements.gpu.txt
 
 For CPU or Apple Silicon (MPS GPU):
 ```bash
-pip install -r requirements.cpu.txt  # Includes PyTorch with MPS support
+pip install -r requirements.cpu.txt
 ```
 
 For development:
@@ -79,13 +125,10 @@ pip install -e .
 #### 4. Launch System
 ```bash
 # Start YOLO server
-./start_yolo_connect.sh models/yolo11n-pose.pt
+python start_yolo_server.py models/yolo11n-pose.pt
 
-# Or manually
-python processing.py -p models/yolo11n-pose.pt
-
-# Open TouchDesigner project
-open YoloDetection.toe
+# In another terminal, launch TouchDesigner
+python launch_touchdesigner.py YoloDetection.toe
 ```
 
 ## 📊 Architecture
@@ -154,12 +197,24 @@ python main.py -c models/yolo11n.pt -i input.mp4 -o output.mp4
 
 ### Quiet Mode (Production)
 ```bash
-python setup_all.py -q  # Suppresses debug output
+python setup_all.py -q -m models/yolo11n-pose.pt  # Suppresses debug output
 ```
 
 ### Stop All Processes
 ```bash
 python setup_all.py --stop
+```
+
+### Environment Management
+```bash
+# Create/recreate virtual environment
+python setup_env.py
+
+# Start server with specific venv
+python start_yolo_server.py models/yolo11n-pose.pt --venv path/to/venv
+
+# Launch TD without venv setup (uses system Python)
+python launch_touchdesigner.py --no-venv
 ```
 
 ## 📐 Configuration
