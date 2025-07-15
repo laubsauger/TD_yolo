@@ -167,22 +167,46 @@ sequenceDiagram
 - `image`: Frame buffer (float32, configurable size)
 - `detection_data`: 16KB buffer for bounding boxes
 - `pose_data`: 32KB buffer for pose keypoints
+- `fps_stats`: 16KB buffer for performance metrics (4 floats: server_fps, process_ms, frames, td_fps)
 
 ## 🎮 TouchDesigner Nodes
 
-### Script TOP (`td_complete.py`)
+### Script TOP - Entry Point (`td_top_yolo.py`)
 
-- Handles frame I/O with shared memory
-- Draws bounding boxes and labels
-- Configurable detection parameters
-- Real-time performance metrics
+- Main video I/O with shared memory
+- Draws bounding boxes, labels, and pose skeletons
+- Configurable detection and pose parameters
+- Flip/mirror controls for webcam compatibility
+- Overlay-only mode for compositing
 
-### Script CHOP (`td_chop_pose.py`)
+### Script CHOP - Pose Data (`td_chop_pose.py`)
 
 - Outputs pose keypoints as channels
-- 17 keypoints × 3 values (x, y, confidence)
-- Per-person tracking
-- Smoothing and filtering options
+- 17 COCO keypoints × 3 values (x, y, confidence)
+- Per-person or all-persons tracking
+- Left/right swapping for flipped video
+
+### Script CHOP - Detection Data (`td_chop_detection.py`)
+
+- Outputs bounding boxes as channels
+- Format: x1, y1, x2, y2, score, class_id
+- Multi-person support
+
+### Script CHOP - FPS Stats (`td_chop_fps_stats.py`)
+
+- Real-time performance monitoring
+- Channels: server_fps, server_process_ms, server_frames, td_fps
+- Auto-connect to shared memory
+
+### Script DAT - OpenPose Joints (`td_dat_openpose_joints.py`)
+
+- Converts COCO pose to OpenPose format
+- 18-joint output compatible with OpenPose renderer
+- Coordinate transformation options
+
+### Script CHOP - OpenPose Data (`td_chop_openpose.py`)
+
+- Compatible with OpenPose format
 
 ## 🤖 Supported Models
 
@@ -212,13 +236,13 @@ sequenceDiagram
 python main.py -c models/yolo11n.pt -i input.mp4 -o output.mp4
 ```
 
-### Quiet Mode (Production)
+### Inference Server - Setup/Start - Quiet Mode (Production)
 
 ```bash
 python setup_all.py -q -m models/yolo11n-pose.pt  # Suppresses debug output
 ```
 
-### Stop All Processes
+### Inference Server - Stop All Processes
 
 ```bash
 python setup_all.py --stop
