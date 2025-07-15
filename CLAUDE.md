@@ -1,180 +1,136 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+AI assistant instructions for the TD_Yolo project.
 
 ## Project Overview
 
-This is a TouchDesigner YOLO integration project that enables real-time object detection and pose estimation. It uses shared memory for high-performance communication between TouchDesigner and Python YOLO processing.
+TouchDesigner YOLO integration for real-time object detection and pose estimation using shared memory for zero-copy performance.
 
-## Performance Philosophy
+## Key Features
 
-This codebase prioritizes **maximum real-time performance** for interactive installations:
+- Object detection (80+ classes) and pose estimation (17-point skeleton)
+- Shared memory IPC between TouchDesigner and Python
+- Support for YOLO11 models
+- Cross-platform (Windows, macOS, Linux)
 
-### Core Design Principles
+## Environment Setup
 
-1. **Zero-Copy Architecture**: Shared memory between TouchDesigner and Python
-2. **Direct Model Access**: Raw tensor outputs for maximum flexibility
-3. **Custom Optimizations**: Cython NMS, in-place operations, minimal allocations
-4. **TouchDesigner First**: All design decisions favor TD integration
+**Use Python 3.11** (3.13 has compatibility issues with dependencies)
 
-### Performance Targets
+```bash
+# Setup virtual environment
+./setup.sh         # macOS/Linux
+setup.bat          # Windows
+python3.11 setup_env.py  # Direct
 
-- 60+ FPS for detection on modern GPUs
-- 30+ FPS for pose estimation
-- < 16ms latency end-to-end
-- Support for multiple simultaneous models
-
-### Key Features for Installations
-
-- **Object Detection**: Bounding boxes with class labels
-- **Pose Estimation**: 17-point COCO skeleton tracking
-- **OpenPose Export**: ControlNet-ready JSON output (planned)
-- **Multi-person Tracking**: Handles crowded scenes
-- **Shared Memory IPC**: Zero-copy frame transfer
-
-### When NOT to Use Ultralytics Directly
-
-- We need raw model outputs (pose keypoints)
-- TouchDesigner requires custom coordinate systems
-- Shared memory integration is critical
-- Custom NMS for TD compatibility
-
-### Future Enhancements
-
-- [ ] OpenPose JSON export for ControlNet
-- [ ] ByteTrack integration for persistent IDs
-- [ ] TensorRT optimization path
-- [ ] Multi-camera synchronization
+# Activate
+source venv/bin/activate  # macOS/Linux
+venv\Scripts\activate     # Windows
+```
 
 ## Essential Commands
 
-**IMPORTANT: Always use the conda environment `yolo_env` for this project!**
-
 ```bash
-# Check if yolo_env exists, create if needed
-conda env list | grep yolo_env || conda create -n yolo_env python=3.9 -y
+# All-in-one (recommended)
+python setup_all.py -m models/yolo11n-pose.pt
 
-# ALWAYS activate the environment before any Python operations
-conda activate yolo_env
+# Manual steps
+python start_yolo_server.py models/yolo11n-pose.pt
+python launch_touchdesigner.py YoloDetection.toe
+
+# Custom resolution
+python setup_all.py -m models/yolo11n-pose.pt -w 1920 -h 1080
+
+# Stop all
+python setup_all.py --stop
 ```
 
-### Development Setup
+## Architecture
 
-```bash
-# Install dependencies (choose one) - AFTER activating yolo_env
-conda activate yolo_env
-pip install -r requirements.gpu.txt  # For GPU
-pip install -r requirements.cpu.txt  # For CPU
-pip install -r requirements.dev.txt  # For development
+### Shared Memory Layout
 
-# Build Cython extensions
-pip install -e .  # Development mode
-python -m cibuildwheel --platform <your_platform>  # Binary distribution
-```
+- `yolo_states`: 3-byte sync flags
+- `params`: ShareableList with config
+- `image`: Frame buffer (float32, 1280x720x3 default)
+- `detection_data`: 16KB for bounding boxes  
+- `pose_data`: 32KB for keypoints
 
-### Running the System
-
-```bash
-# Start YOLO server for TouchDesigner (scripts already handle conda activation)
-./start_yolo_connect.sh models/yolov8n.pt  # Object detection
-./start_yolo_connect.sh models/yolov8n-pose.pt  # Pose estimation
-
-# Or manually with setup_all.py (activate conda first!)
-conda activate yolo_env
-python setup_all.py -m models/yolo11n-pose.pt -w 640 --height 640
-
-# Launch TouchDesigner with environment
-./launch_touchdesigner.sh [project.toe]
-
-# Standalone video processing
-conda activate yolo_env
-python main.py -c models/yolov8n.pt -i input.mp4 -o output.mp4
-```
-
-### Testing and Quality
-
-```bash
-# ALWAYS activate conda environment first
-conda activate yolo_env
-
-# Run tests
-pytest
-
-# Linting
-pylint yolo_models
-
-# Auto-format code
-autopep8 --in-place --recursive yolo_models
-
-# Typecheck (when implemented)
-npm run typecheck  # If available
-ruff check .  # If available
-```
-
-## Architecture Overview
-
-### Shared Memory Communication
-
-The project uses multiprocessing shared memory for zero-copy data transfer:
-
-- **yolo_states**: 3-byte synchronization flags
-- **params**: Configuration parameters (thresholds, dimensions, draw flags)
-- **image**: Frame buffer (float32, default 1280x720x3)
-- **detection_data**: 16KB buffer for bounding boxes
-- **pose_data**: 32KB buffer for keypoints (17 COCO keypoints per person)
-
-### Processing Pipeline
+### Processing Flow
 
 1. TouchDesigner writes frame to shared memory
-2. Python server detects new frame via state flags
-3. YOLO model processes frame (detection or pose)
+2. Python monitors `yolo_states` for new frames
+3. YOLO processes frame (detection or pose)
 4. Results written back to shared memory
-5. TouchDesigner reads processed frame and data
+5. TouchDesigner reads and visualizes
 
-### Key Components
+### Key Files
 
-- **processing.py**: Main YOLO server that monitors shared memory
-- **setup_all.py**: Automated setup and launcher
-- **yolo_models/detection/detector.py**: PyTorch YOLO wrapper
-- **yolo_models/processing/detection_processing.py**: Object detection processor
-- **yolo_models/processing/pose_processing.py**: Pose estimation processor
-- **td_top_resolution_config.py**: TouchDesigner Script TOP that writes required config file (could be checked and maybe refactored/handled differently)
-- **td_top_yolo.py**: TouchDesigner Script TOP for video I/O, actual input to yolo processor on the backend, required for all others
-- **td_chop_pose.py**: TouchDesigner Script CHOP for pose data output
-- **td_chop_detection.py**: TouchDesigner Script CHOP for object detection data output (bounding boxes, labels, etc)
+- `setup_all.py` - Creates shared memory, launches everything
+- `processing.py` - Main YOLO server
+- `yolo_models/processing/base_processing.py` - Shared memory handler
+- `nodes_TD/td_top_yolo.py` - TouchDesigner video I/O
+- `nodes_TD/td_chop_pose.py` - Pose data output
 
-### Model Support
+## Development Guidelines
 
-- **Detection models**: Standard YOLO (yolov8n.pt, yolov8x.pt, yolo11n.pt)
-- **Pose models**: YOLO-Pose (yolov8n-pose.pt, yolo11n-pose.pt)
-- Models auto-detected by "pose" in filename
-- Supports PyTorch on CPU, CUDA, and Apple MPS
+### Code Style
 
-### Critical Implementation Details
+- No comments unless requested
+- Follow existing patterns
+- Use type hints
+- Keep functions focused
 
-- Pose models automatically use 640x640 resolution
-- Detection models default to 1280x720
-- Coordinate system: TouchDesigner uses vertical flip
-- Custom Cython NMS implementation for TouchDesigner compatibility
-- Keypoint smoothing (EMA) for stable pose tracking
-- Frame duplicate detection to handle dropped frames
+### Performance
 
-## Current Work Items
+- Minimize allocations in hot paths
+- Use in-place operations
+- Batch numpy operations
+- Profile before optimizing
 
-See `Yolo11_upgrade.md` for the ongoing YOLO11 migration:
+### Testing
 
-- Upgrading ultralytics 8.0.114 → 8.3.165
-- Adding yolo11n-pose.pt support
-- Updating for API breaking changes
+```bash
+pytest tests/
+pylint yolo_models
+```
 
-## Model Download Locations
+## Common Issues
 
-Models should be placed in the `models/` directory. Download from:
+### NumPy Version
 
-- <https://github.com/ultralytics/ultralytics>
-- YOLO11 models: yolo11n.pt, yolo11n-pose.pt, etc.
+- Must use NumPy < 2.0 (OpenCV compatibility)
+- Fixed in requirements.base.txt
 
-## GENERAL INSTRUCTIONS
+### Python 3.13
 
-- Avoid over zealously creating new files when the changes could just as well be applied to the existing file that we're currently working on.
-- Make smart decisions as to when a change is much better suited as an edit instead of total rewrite under new file name from the ground up (where you'll usually forget half of the prior implementation while focusing on the new changes. I know applying / editing is hard but please don't be that guy who writes td_node_v4_final_fixed_thistimeforreal.tsx filenames)
+- PyAV has Cython compatibility issues
+- Use Python 3.11 or 3.12
+
+### Shared Memory
+
+- Server requires existing shared memory
+- Use `setup_all.py` to create it first
+
+## Model Support
+
+**Detection**: yolo11n.pt, yolo11s.pt, yolo11m.pt, yolo11l.pt, yolo11x.pt
+**Pose**: yolo11n-pose.pt, yolo11s-pose.pt, etc.
+
+Pose models auto-switch to 640x640 resolution.
+
+## TouchDesigner Integration
+
+Scripts in `nodes_TD/`:
+
+- `td_top_yolo.py` - Main video I/O
+- `td_chop_detection.py` - Detection data
+- `td_chop_pose.py` - Pose keypoints
+- `td_chop_fps_stats.py` - Performance metrics
+- `td_chop_openpose.py` - Open Pose keypoints
+- `td_dat_openpose.py` - Open Pose DAT Renderer
+
+## Future Work
+
+- [ ] ByteTrack for persistent IDs
+- [ ] TensorRT optimization
+- [ ] Multi-camera support

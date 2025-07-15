@@ -258,7 +258,7 @@ Custom: Use `-w` and `-h` flags
 
 ### Project Structure
 ```
-yolo-video-detection-example/
+TD_yolo/
 ├── models/                 # YOLO model files
 ├── yolo_models/           # Core processing code
 │   ├── detection/         # Detection pipeline
@@ -280,43 +280,6 @@ pytest tests/
 pylint yolo_models
 autopep8 --in-place --recursive yolo_models
 ```
-
-## 🗺️ Roadmap
-
-### Phase 1: ControlNet Integration (Q1 2025)
-- [ ] OpenPose JSON export for Stable Diffusion ControlNet
-- [ ] Real-time pose to OpenPose format conversion
-- [ ] Bone confidence filtering
-- [ ] Neck keypoint interpolation from shoulders
-- [ ] TouchDesigner to ComfyUI pipeline
-
-### Phase 2: Advanced Tracking (Q2 2025)
-- [ ] ByteTrack integration for persistent person IDs
-- [ ] Multi-person trajectory smoothing
-- [ ] Re-identification after occlusion
-- [ ] Track history visualization
-- [ ] ID-based event triggers in TD
-
-### Phase 3: Performance Optimization (Q2 2025)
-- [ ] TensorRT optimization for NVIDIA GPUs
-- [ ] INT8 quantization support
-- [ ] Dynamic batching for multiple cameras
-- [ ] GPU memory pooling
-- [ ] Benchmark suite and profiling tools
-
-### Phase 4: Multi-Camera System (Q3 2025)
-- [ ] Synchronized multi-camera capture
-- [ ] 3D pose reconstruction from multiple views
-- [ ] Camera calibration tools
-- [ ] Unified coordinate system
-- [ ] Load balancing across GPUs
-
-### Phase 5: Extended Features (Q4 2025)
-- [ ] Hand tracking integration
-- [ ] Face landmark detection
-- [ ] Instance segmentation support
-- [ ] Action recognition
-- [ ] Custom model training pipeline
 
 ## 🤝 Contributing
 
